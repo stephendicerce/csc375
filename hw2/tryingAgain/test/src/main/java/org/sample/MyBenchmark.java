@@ -1,0 +1,94 @@
+/*
+ * Copyright (c) 2014, Oracle America, Inc.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ *  * Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
+ *
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ *  * Neither the name of Oracle nor the names of its contributors may be used
+ *    to endorse or promote products derived from this software without
+ *    specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+package org.sample;
+
+import org.projectClasses.*;
+import org.openjdk.jmh.annotations.Benchmark;
+import org.openjdk.jmh.annotations.Scope;
+import org.openjdk.jmh.annotations.State;
+import java.util.Random;
+
+public class MyBenchmark {
+
+    @State(Scope.Benchmark)
+    public static class BenchmarkState {
+	volatile String[] args = null;
+    }
+    
+    @Benchmark
+    public static void main(BenchmarkState state) {
+	final int initialNumberOfClasses = 100;
+	org.projectClasses.Class[] classArray = new org.projectClasses.Class[initialNumberOfClasses];
+	Random r = new Random();
+	for(int i=0, length = classArray.length; i<length; ++i) { //creates an array of completely randomized classes
+	    classArray[i] = new org.projectClasses.Class("Class" + i, r.nextInt(100) + 10, r.nextInt(100));
+	}
+	
+	org.projectClasses.Classes classes = new org.projectClasses.Classes(classArray); // adds the array to the classes hashmap
+	
+	for(int i=0; i<500; ++i) { //creates 500 threads simulating 500 students(clients)
+	    new Thread(() -> {
+		    Random fnr = new Random();
+		    int favoriteNumber = fnr.nextInt(100); // picks the students favorite subject
+		    Random random = new Random();
+		    while(true) {
+			String className = "Class" + random.nextInt(classes.getSize()); //selects a random class
+			org.projectClasses.Class selectedClass = classes.getClass(className);
+			if(selectedClass != null) {
+			    if((selectedClass.getClassSubject()-favoriteNumber <= 5 && selectedClass.getClassSubject()-favoriteNumber >= 0) || (favoriteNumber-selectedClass.getClassSubject() <= 5 && favoriteNumber-selectedClass.getClassSubject() >= 0)) { //if the class subject is within 5 of the student's favorite subject then the student will register for it
+				selectedClass.addStudentToSection(Thread.currentThread().getId());
+			    }
+			}
+		    }
+	    }, "Student" + i).start();
+	}
+	
+	new Thread(() -> {
+		Random random = new Random();
+		int totalNumberOfClasses = initialNumberOfClasses;
+		while(true) {
+		    if(random.nextInt(10000000) == 18) { // picked my favorite number as a limiter so that classes wouldnt be created at an incredibly fast speed
+			classes.addClass(new org.projectClasses.Class("Class" + totalNumberOfClasses++, random.nextInt(100)+10, random.nextInt(100)));
+		    }
+		}
+	}, "Class Creator").start();
+	
+	new Thread(() -> {
+		Random random = new Random();
+		while(true) {
+		    if(random.nextInt(10000000) == 24) { //picked my least favorite number as a limiter so that classes wouldnt be removed instantly
+			classes.removeClass("Class" + random.nextInt(classes.getSize()));
+		    }
+		}
+	}, "Class Remover").start();
+    }
+}
